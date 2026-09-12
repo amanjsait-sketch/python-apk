@@ -20,15 +20,16 @@ jobs:
           python-version: "3.11"
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Install dependencies
+        shell: bash
         run: |
-          sudo apt update
-          sudo apt install -y \
+          sudo apt-get update
+          sudo apt-get install -y \
             git zip unzip autoconf libtool pkg-config \
             zlib1g-dev libncurses5-dev libncursesw5-dev \
             cmake libffi-dev libssl-dev automake autopoint gettext
@@ -36,9 +37,9 @@ jobs:
           pip install buildozer cython==0.29.34
 
       - name: Build APK
-  run: |
-    buildozer -v android debug 2>&1 | tee build.log
-    exit ${PIPESTATUS[0]}
+        shell: bash
+        run: |
+          buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
