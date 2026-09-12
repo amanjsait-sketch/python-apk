@@ -61,28 +61,54 @@ jobs:
           echo "===== FILES ====="
           ls -la
 
+          echo "===== BUILDOZER SPEC ====="
+          cat buildozer.spec
+
       - name: Build APK
         shell: bash
         run: |
-          set -o pipefail
+          set +e
 
-          echo "===== STARTING APK BUILD ====="
+          echo "===== STARTING BUILDOZER ====="
 
-          buildozer -v android debug 2>&1 | tee build.log
+          buildozer -v android debug > build.log 2>&1
 
-          STATUS=${PIPESTATUS[0]}
+          STATUS=$?
 
-          echo "===== BUILDOZER EXIT CODE: $STATUS ====="
+          echo "$STATUS" > build_status.txt
 
-          echo "===== BIN DIRECTORY ====="
+          echo "===== BUILDOZER FINISHED ====="
+          echo "Exit code: $STATUS"
 
-          if [ -d bin ]; then
-            ls -lah bin
+          exit 0
+
+      - name: Show Build Log
+        if: always()
+        shell: bash
+        run: |
+          echo "========================================"
+          echo "        BUILDOZER ERROR LOG"
+          echo "========================================"
+
+          if [ -f build.log ]; then
+            echo "Log size:"
+            wc -c build.log
+
+            echo ""
+            echo "===== LAST 300 LINES ====="
+            tail -n 300 build.log
           else
-            echo "bin directory was not created"
+            echo "build.log was not created!"
           fi
 
-          exit $STATUS
+          echo ""
+          echo "========================================"
+          echo "        BUILD STATUS"
+          echo "========================================"
+
+          if [ -f build_status.txt ]; then
+            cat build_status.txt
+          fi
 
       - name: Show APK
         if: always()
@@ -108,5 +134,20 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Build-Log
-          path: build.log
+          path: |
+            build.log
+            build_status.txt
           if-no-files-found: warn
+
+      - name: Finish Build
+        if: always()
+        shell: bash
+        run: |
+          if [ -f build_status.txt ]; then
+            STATUS=$(cat build_status.txt)
+            echo "Final Buildozer exit code: $STATUS"
+            exit "$STATUS"
+          else
+            echo "Build status file not found"
+            exit 1
+          fi
