@@ -9,7 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -29,6 +29,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
+
           sudo apt-get install -y \
             git \
             zip \
@@ -44,23 +45,25 @@ jobs:
             libssl-dev \
             automake \
             autopoint \
-            gettext \
-            expect
+            gettext
 
           python -m pip install --upgrade pip
-          pip install buildozer setuptools cython==0.29.34
+
+          pip install \
+            buildozer \
+            setuptools \
+            "cython==0.29.34"
 
       - name: Check Buildozer
         run: |
-          echo "===== BUILDOZER ====="
-          which buildozer
-          buildozer --version
-
           echo "===== PYTHON ====="
           python --version
 
-          echo "===== JAVA ====="
-          java -version
+          echo "===== BUILDOZER ====="
+          buildozer --version
+
+          echo "===== BUILDOZER PATH ====="
+          which buildozer
 
           echo "===== PROJECT FILES ====="
           ls -la
@@ -71,52 +74,42 @@ jobs:
       - name: Build APK
         shell: bash
         run: |
-          echo "===== STARTING BUILDOZER ====="
+          set -o pipefail
 
-          set +e
-
-          script -q -e -c "buildozer -v android debug" build.log
-
-          STATUS=$?
-
-          echo ""
-          echo "===== BUILDOZER EXIT CODE ====="
-          echo "$STATUS"
-
-          exit 0
-
-      - name: Show Build Log
-        if: always()
-        shell: bash
-        run: |
           echo "========================================"
-          echo "          BUILDOZER LOG"
+          echo "        STARTING BUILDOZER BUILD"
           echo "========================================"
 
-          if [ -f build.log ]; then
-            echo "Log file size:"
-            wc -c build.log
+          echo "Automatically accepting Android SDK licenses..."
 
-            echo ""
-            echo "===== LAST 300 LINES ====="
-            tail -n 300 build.log
+          yes | timeout 80m buildozer -v android debug 2>&1 | tee build.log
 
-            echo ""
-            echo "===== ERRORS ====="
-            grep -iE "error|exception|failed|traceback" build.log | tail -n 100 || true
-          else
-            echo "build.log DOES NOT EXIST"
-          fi
+          STATUS=${PIPESTATUS[1]}
+
+          echo "========================================"
+          echo "       BUILDOZER EXIT CODE: $STATUS"
+          echo "========================================"
+
+          echo "===== LAST 200 LINES ====="
+          tail -n 200 build.log
+
+          exit $STATUS
 
       - name: Show APK
         if: always()
         run: |
-          echo "===== APK FILES ====="
+          echo "========================================"
+          echo "              APK FILES"
+          echo "========================================"
 
           if [ -d bin ]; then
-            find bin -maxdepth 1 -type f -name "*.apk" -print
+            ls -lah bin
+
+            echo ""
+            echo "APK files:"
+            find bin -type f -name "*.apk" -print
           else
-            echo "No bin directory"
+            echo "No bin directory found."
           fi
 
       - name: Upload APK
