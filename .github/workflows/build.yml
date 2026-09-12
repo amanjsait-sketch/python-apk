@@ -1,4 +1,4 @@
-name: Check Buildozer
+name: Build APK
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -19,21 +20,93 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install Buildozer
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git \
+            zip \
+            unzip \
+            autoconf \
+            libtool \
+            pkg-config \
+            zlib1g-dev \
+            libncurses5-dev \
+            libncursesw5-dev \
+            cmake \
+            libffi-dev \
+            libssl-dev \
+            automake \
+            autopoint \
+            gettext
+
           python -m pip install --upgrade pip
           pip install buildozer setuptools cython==0.29.34
 
       - name: Check Buildozer
         run: |
-          echo "===== Python ====="
+          echo "===== BUILDOZER ====="
+          which buildozer
+          buildozer --version
+
+          echo "===== PYTHON ====="
           python --version
 
-          echo "===== Pip ====="
-          pip --version
+          echo "===== FILES ====="
+          ls -la
 
-          echo "===== Buildozer location ====="
-          which buildozer
+      - name: Build APK
+        shell: bash
+        run: |
+          set -o pipefail
 
-          echo "===== Buildozer version ====="
-          buildozer --version
+          echo "===== STARTING APK BUILD ====="
+
+          buildozer -v android debug 2>&1 | tee build.log
+
+          STATUS=${PIPESTATUS[0]}
+
+          echo "===== BUILDOZER EXIT CODE: $STATUS ====="
+
+          echo "===== BIN DIRECTORY ====="
+
+          if [ -d bin ]; then
+            ls -lah bin
+          else
+            echo "bin directory was not created"
+          fi
+
+          exit $STATUS
+
+      - name: Show APK
+        if: always()
+        run: |
+          echo "===== APK FILES ====="
+
+          if [ -d bin ]; then
+            find bin -maxdepth 1 -type f -name "*.apk" -print
+          else
+            echo "No bin directory"
+          fi
+
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: APK
+          path: bin/*.apk
+          if-no-files-found: error
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build-Log
+          path: build.log
+          if-no-files-found: warn
