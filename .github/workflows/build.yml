@@ -1,16 +1,17 @@
-name: build apk
+name: Build APK
+
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
 jobs:
-build:
-runs-on: ubuntu-latest
+  build:
+    runs-on: ubuntu-latest
 
-steps:
--name: checkout
-uses: actions/ckeckout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
--name: setup buildozer
-uses: Artemsokolov/buildozr-action@v1
-with:
-command: buildozer android debug
+      - name: Setup Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        with:
+          command: buildozer android debug
