@@ -13,6 +13,8 @@ requirements = python3,kivy
 
 orientation = portrait
 
+android.accept_sdk_license = True
+
 [buildozer]
 
 log_level = 2
