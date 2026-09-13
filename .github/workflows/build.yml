@@ -28,7 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get update
           sudo apt-get install -y \
             git \
             zip \
@@ -59,32 +59,52 @@ jobs:
       - name: Build APK
         shell: bash
         run: |
-          set -o pipefail
+          set +e
 
-          buildozer -v android debug 2>&1 | tee build.log
+          timeout 35m buildozer -v android debug 2>&1 | tee build.log
 
-      - name: Show Build Log
+          STATUS=${PIPESTATUS[0]}
+
+          echo "$STATUS" > build_status.txt
+
+          echo "BUILD EXIT CODE: $STATUS"
+
+          exit 0
+
+      - name: Show Build Error
         if: always()
         run: |
-          echo "========== LAST 200 LINES =========="
+          echo "========== LAST 200 LOG LINES =========="
+
           if [ -f build.log ]; then
             tail -n 200 build.log
           else
             echo "build.log not found"
           fi
 
+          echo "========== ERROR LINES =========="
+
+          if [ -f build.log ]; then
+            grep -iE "error:|error |failed|exception|undefined macro" build.log | tail -n 100 || true
+          fi
+
       - name: Show APK
         if: always()
         run: |
           echo "========== APK FILES =========="
-          find . -type f -name "*.apk" -ls || true
+
+          find . -type f -name "*.apk" -print 2>/dev/null || true
 
       - name: Upload APK
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: APK
-          path: bin/*.apk
+          path: |
+            bin/*.apk
+            .buildozer/android/platform/build-*/dists/*/build/outputs/apk/*.apk
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload Build Log
         if: always()
@@ -92,3 +112,15 @@ jobs:
         with:
           name: Build-Log
           path: build.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Fail if build failed
+        if: always()
+        run: |
+          STATUS=$(cat build_status.txt 2>/dev/null || echo 1)
+
+          if [ "$STATUS" != "0" ]; then
+            echo "Build failed with exit code $STATUS"
+            exit "$STATUS"
+          fi
