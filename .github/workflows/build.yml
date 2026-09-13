@@ -28,8 +28,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y \
+          sudo apt update -o Acquire::Retries=3
+          sudo apt-get -y --no-install-recommends install \
             git \
             zip \
             unzip \
