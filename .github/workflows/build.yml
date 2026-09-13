@@ -26,9 +26,27 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install dependencies
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: ""
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "build-tools;37.0.0"
+
+      - name: Install Linux dependencies
         run: |
           sudo apt update
+
           sudo apt install -y \
             git \
             zip \
@@ -41,21 +59,46 @@ jobs:
             zlib1g-dev \
             libncurses5-dev \
             libncursesw5-dev \
+            libtinfo6 \
             cmake \
             libffi-dev \
             libssl-dev \
             gettext \
             autopoint
 
+      - name: Install Buildozer
+        run: |
           python -m pip install --upgrade pip
           pip install buildozer setuptools cython==0.29.34
 
+      - name: Check Android SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+
+          echo "===== SDK MANAGER ====="
+          sdkmanager --version
+
+          echo "===== BUILD TOOLS ====="
+          ls -la "$ANDROID_HOME/build-tools" || true
+
+          echo "===== AIDL 35 ====="
+          "$ANDROID_HOME/build-tools/35.0.0/aidl" --version || true
+
+          echo "===== AIDL 37 ====="
+          "$ANDROID_HOME/build-tools/37.0.0/aidl" --version || true
+
       - name: Check files
         run: |
-          echo "===== FILES ====="
+          echo "===== PROJECT FILES ====="
           ls -la
+
           echo "===== BUILDOZER SPEC ====="
           cat buildozer.spec
+
+      - name: Clean Buildozer cache
+        run: |
+          rm -rf ~/.buildozer
 
       - name: Build APK
         continue-on-error: true
@@ -63,39 +106,61 @@ jobs:
           buildozer -v android debug > build.log 2>&1
           echo $? > build_status.txt
 
-      - name: Show Error
+      - name: Show Build Error
         if: always()
         run: |
-          echo "===== BUILD STATUS ====="
+          echo "======================================"
+          echo "BUILD STATUS"
+          echo "======================================"
+
           cat build_status.txt 2>/dev/null || true
 
-          echo "===== LAST 200 LINES ====="
+          echo "======================================"
+          echo "LAST 200 LINES"
+          echo "======================================"
+
           tail -n 200 build.log 2>/dev/null || true
 
-          echo "===== ERRORS ====="
-          grep -iE "error:|error |failed|exception|undefined macro|command failed" build.log | tail -n 100 || true
+          echo "======================================"
+          echo "ERRORS"
+          echo "======================================"
 
-          echo "===== APK ====="
+          grep -iE \
+            "error:|error |failed|exception|undefined macro|command failed|aidl|license" \
+            build.log | tail -n 100 || true
+
+          echo "======================================"
+          echo "APK FILES"
+          echo "======================================"
+
           find . -type f -name "*.apk" -print || true
 
       - name: Write Summary
         if: always()
         run: |
-          echo "# 🔧 Build APK Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "# Build APK Report" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
 
-          echo "## Error messages" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Build status" >> "$GITHUB_STEP_SUMMARY"
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
-          grep -iE "error:|error |failed|exception|undefined macro|command failed" build.log | tail -n 100 >> "$GITHUB_STEP_SUMMARY" || true
+          cat build_status.txt 2>/dev/null || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-          echo "## Last lines" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Errors" >> "$GITHUB_STEP_SUMMARY"
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
-          tail -n 100 build.log >> "$GITHUB_STEP_SUMMARY" || true
+
+          grep -iE \
+            "error:|error |failed|exception|undefined macro|command failed|aidl|license" \
+            build.log | tail -n 100 >> "$GITHUB_STEP_SUMMARY" || true
+
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
           echo "## APK files" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+
           find . -type f -name "*.apk" >> "$GITHUB_STEP_SUMMARY" || true
+
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
         if: always()
@@ -107,7 +172,7 @@ jobs:
             .buildozer/android/platform/build-*/dists/*/build/outputs/apk/*.apk
           if-no-files-found: ignore
 
-      - name: Upload Log
+      - name: Upload Build Log
         if: always()
         uses: actions/upload-artifact@v4
         with:
