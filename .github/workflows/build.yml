@@ -28,12 +28,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt update -o Acquire::Retries=3
-          sudo apt-get -y --no-install-recommends install \
+          sudo apt-get update -o Acquire::Retries=3
+          sudo apt-get install -y \
             git \
             zip \
             unzip \
             autoconf \
+            automake \
             libtool \
             libltdl-dev \
             pkg-config \
@@ -43,7 +44,6 @@ jobs:
             cmake \
             libffi-dev \
             libssl-dev \
-            automake \
             autopoint \
             gettext
 
@@ -59,53 +59,25 @@ jobs:
       - name: Build APK
         shell: bash
         run: |
-          set +e
+          set -o pipefail
 
-          timeout 35m buildozer -v android debug 2>&1 | tee build.log
+          buildozer -v android debug 2>&1 | tee build.log
 
-          STATUS=${PIPESTATUS[0]}
-
-          echo "$STATUS" > build_status.txt
-
-          echo "======================================"
-          echo "BUILD EXIT CODE: $STATUS"
-          echo "======================================"
-
-          exit 0
-
-      - name: Show Build Error
+      - name: Show Build Log
         if: always()
         run: |
-          echo "======================================"
-          echo "LAST 150 LINES OF BUILD LOG"
-          echo "======================================"
-
+          echo "========== LAST 200 LINES =========="
           if [ -f build.log ]; then
-            tail -n 150 build.log
+            tail -n 200 build.log
           else
             echo "build.log not found"
-          fi
-
-          echo "======================================"
-          echo "ERROR LINES"
-          echo "======================================"
-
-          if [ -f build.log ]; then
-            grep -iE "error:|error |failed|exception|undefined macro" build.log | tail -n 50 || true
           fi
 
       - name: Show APK
         if: always()
         run: |
-          echo "======================================"
-          echo "APK FILES"
-          echo "======================================"
-
-          if [ -d bin ]; then
-            find bin -type f -name "*.apk" -ls
-          else
-            echo "No bin directory"
-          fi
+          echo "========== APK FILES =========="
+          find . -type f -name "*.apk" -ls || true
 
       - name: Upload APK
         if: success()
@@ -120,13 +92,3 @@ jobs:
         with:
           name: Build-Log
           path: build.log
-
-      - name: Fail if build failed
-        if: always()
-        run: |
-          STATUS=$(cat build_status.txt 2>/dev/null || echo 1)
-
-          if [ "$STATUS" != "0" ]; then
-            echo "Build failed with exit code $STATUS"
-            exit "$STATUS"
-          fi
